@@ -1,0 +1,49 @@
+"""Adapter protocols. Real and mock impls both conform to these."""
+
+from typing import Protocol, runtime_checkable
+
+from b2b_toolkit.models import (
+    Mailbox,
+    PartnerTier,
+    PlannerBoard,
+    PortalAccount,
+    SharePointSite,
+    ZendeskOrg,
+)
+
+
+@runtime_checkable
+class M365Adapter(Protocol):
+    async def create_mailbox(self, *, display_name: str, alias: str) -> Mailbox: ...
+    async def create_sharepoint_site(self, *, name: str, owner_upn: str) -> SharePointSite: ...
+    async def create_planner_board(
+        self, *, title: str, owner_group_id: str, buckets: list[str]
+    ) -> PlannerBoard: ...
+    async def upload_file(self, *, site_id: str, path: str, content: bytes) -> str: ...
+
+
+@runtime_checkable
+class HubSpotAdapter(Protocol):
+    async def get_deal(self, deal_id: str) -> dict: ...
+    async def get_company(self, company_id: str) -> dict: ...
+    async def add_note_to_deal(self, deal_id: str, note: str) -> None: ...
+    async def get_engagement_signals(self, company_id: str, days: int = 30) -> dict: ...
+
+
+@runtime_checkable
+class ZendeskAdapter(Protocol):
+    async def create_organization(
+        self, *, name: str, domain: str, tier: PartnerTier
+    ) -> ZendeskOrg: ...
+    async def attach_sla_policy(self, *, org_id: int, tier: PartnerTier) -> int: ...
+    async def get_ticket_velocity(self, org_id: int, days: int = 30) -> dict: ...
+
+
+@runtime_checkable
+class PortalAdapter(Protocol):
+    async def create_account(self, *, partner_id: str, partner_name: str) -> PortalAccount: ...
+    async def upload_co_branded_asset(
+        self, *, account_id: str, filename: str, content: bytes
+    ) -> str: ...
+    async def create_intake_form(self, *, account_id: str, fields: list[str]) -> str: ...
+    async def get_usage(self, account_id: str, days: int = 30) -> dict: ...
