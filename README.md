@@ -2,7 +2,15 @@
 
 Reusable Python integration adapters for AI agents that operate against B2B SaaS stacks.
 
-Designed to be imported by both [partner-onboarding-agent](../partner-onboarding-agent/) and [ai-account-manager](../ai-account-manager/), but works standalone for any LangGraph / LangChain / Anthropic SDK project.
+Designed to be imported by both [partner-onboarding-agent](https://github.com/anthonyonazure/partner-onboarding-agent) and [ai-account-manager](https://github.com/anthonyonazure/ai-account-manager), but works standalone for any LangGraph / LangChain / Anthropic SDK project.
+
+### One small protocol per source — real and mock implementations both conform
+
+![Adapter Protocols](docs/media/adapter-protocols.png)
+
+### Single entry point — env flag picks real vs mock
+
+![Adapter factory](docs/media/factory.png)
 
 ## What's in here
 
