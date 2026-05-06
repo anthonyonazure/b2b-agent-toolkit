@@ -50,6 +50,41 @@ class PortalAccount(BaseModel):
     intake_form_url: str
 
 
+class ConditionalAccessPolicy(BaseModel):
+    id: str
+    display_name: str
+    state: str  # enabled | disabled | enabledForReportingButNotEnforced
+    grant_controls: list[str] = Field(default_factory=list)
+    user_scope_includes: list[str] = Field(default_factory=list)
+    user_scope_excludes: list[str] = Field(default_factory=list)
+    apps_includes: list[str] = Field(default_factory=list)
+
+
+class AuditEvent(BaseModel):
+    id: str
+    activity_display_name: str
+    activity_datetime: datetime
+    initiated_by: str
+    target_resources: list[str] = Field(default_factory=list)
+    result: str  # success | failure | timeout | unknownFutureValue
+
+
+class AzureResourceFact(BaseModel):
+    resource_id: str
+    resource_type: str
+    name: str
+    location: str
+    properties: dict = Field(default_factory=dict)
+
+
+class EmailDraft(BaseModel):
+    draft_id: str
+    to: list[EmailStr]
+    subject: str
+    body_preview: str
+    web_link: str | None = None
+
+
 class ProvisioningResult(BaseModel):
     """Generic envelope so nodes can store mixed adapter outputs in graph state."""
 

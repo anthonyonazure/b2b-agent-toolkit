@@ -3,6 +3,10 @@
 from typing import Protocol, runtime_checkable
 
 from b2b_toolkit.models import (
+    AuditEvent,
+    AzureResourceFact,
+    ConditionalAccessPolicy,
+    EmailDraft,
     Mailbox,
     PartnerTier,
     PlannerBoard,
@@ -47,3 +51,23 @@ class PortalAdapter(Protocol):
     ) -> str: ...
     async def create_intake_form(self, *, account_id: str, fields: list[str]) -> str: ...
     async def get_usage(self, account_id: str, days: int = 30) -> dict: ...
+
+
+@runtime_checkable
+class EntraAuditAdapter(Protocol):
+    async def list_conditional_access_policies(self) -> list[ConditionalAccessPolicy]: ...
+    async def list_directory_audit_events(self, *, days: int = 30) -> list[AuditEvent]: ...
+    async def list_admin_role_members(self) -> list[dict]: ...
+
+
+@runtime_checkable
+class AzureResourceAdapter(Protocol):
+    async def query_resources(self, kql: str) -> list[AzureResourceFact]: ...
+    async def get_subscription_diagnostic_settings(self) -> list[dict]: ...
+
+
+@runtime_checkable
+class M365MailerAdapter(Protocol):
+    async def create_draft(
+        self, *, sender_upn: str, to: list[str], subject: str, body_html: str
+    ) -> EmailDraft: ...
