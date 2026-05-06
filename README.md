@@ -1,5 +1,9 @@
 # b2b-agent-toolkit
 
+[![tests](https://github.com/anthonyonazure/b2b-agent-toolkit/actions/workflows/tests.yml/badge.svg)](https://github.com/anthonyonazure/b2b-agent-toolkit/actions/workflows/tests.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Reusable Python integration adapters for AI agents that operate against B2B SaaS stacks.
 
 ## Agents that use this
