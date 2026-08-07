@@ -21,9 +21,7 @@ class ZendeskMock:
         self._orgs: dict[int, ZendeskOrg] = {}
         self._next_id = 9000
 
-    async def create_organization(
-        self, *, name: str, domain: str, tier: PartnerTier
-    ) -> ZendeskOrg:
+    async def create_organization(self, *, name: str, domain: str, tier: PartnerTier) -> ZendeskOrg:
         self._next_id += 1
         org = ZendeskOrg(organization_id=self._next_id, name=name)
         self._orgs[org.organization_id] = org

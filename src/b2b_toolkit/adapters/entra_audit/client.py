@@ -8,7 +8,7 @@ Required Graph application permissions:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import structlog
@@ -28,10 +28,11 @@ class EntraAuditClient:
         self._settings = settings
 
     async def _token(self) -> str:
+        tenant_id, client_id, client_secret = self._settings.m365_credentials()
         async with ClientSecretCredential(
-            tenant_id=self._settings.m365_tenant_id,
-            client_id=self._settings.m365_client_id,
-            client_secret=self._settings.m365_client_secret.get_secret_value(),
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret,
         ) as cred:
             return (await cred.get_token("https://graph.microsoft.com/.default")).token
 
@@ -70,21 +71,31 @@ class EntraAuditClient:
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
     async def list_directory_audit_events(self, *, days: int = 30) -> list[AuditEvent]:
-        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
         data = await self._get(
             "auditLogs/directoryAudits",
             params={"$filter": f"activityDateTime ge {since}", "$top": "200"},
         )
         out: list[AuditEvent] = []
         for e in data.get("value", []):
-            initiated = (e.get("initiatedBy") or {}).get("user") or (e.get("initiatedBy") or {}).get("app") or {}
-            targets = [t.get("displayName") or t.get("id") for t in (e.get("targetResources") or [])]
+            initiated = (
+                (e.get("initiatedBy") or {}).get("user")
+                or (e.get("initiatedBy") or {}).get("app")
+                or {}
+            )
+            targets = [
+                t.get("displayName") or t.get("id") for t in (e.get("targetResources") or [])
+            ]
             out.append(
                 AuditEvent(
                     id=e["id"],
                     activity_display_name=e.get("activityDisplayName", ""),
-                    activity_datetime=datetime.fromisoformat(e["activityDateTime"].replace("Z", "+00:00")),
-                    initiated_by=initiated.get("userPrincipalName") or initiated.get("displayName") or "unknown",
+                    # Python 3.11+ parses the trailing "Z" natively, so no
+                    # substitution to "+00:00" is needed.
+                    activity_datetime=datetime.fromisoformat(e["activityDateTime"]),
+                    initiated_by=initiated.get("userPrincipalName")
+                    or initiated.get("displayName")
+                    or "unknown",
                     target_resources=[t for t in targets if t],
                     result=e.get("result", "unknown"),
                 )
