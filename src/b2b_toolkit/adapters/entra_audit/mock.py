@@ -4,14 +4,14 @@ without privileged access management."""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 
 from b2b_toolkit.models import AuditEvent, ConditionalAccessPolicy
 
 log = structlog.get_logger()
-NOW = datetime.now(timezone.utc).replace(tzinfo=None)
+NOW = datetime.now(UTC).replace(tzinfo=None)
 
 
 class EntraAuditMock:
@@ -51,7 +51,11 @@ class EntraAuditMock:
             for i, (name, actor, target) in enumerate(
                 [
                     ("Add user", "admin@mock.tenant", "new-user@mock.tenant"),
-                    ("Update conditional access policy", "secadmin@mock.tenant", "Block legacy authentication"),
+                    (
+                        "Update conditional access policy",
+                        "secadmin@mock.tenant",
+                        "Block legacy authentication",
+                    ),
                     ("Add member to role", "admin@mock.tenant", "Privileged Role Administrator"),
                     ("Reset password (self-service)", "user@mock.tenant", "user@mock.tenant"),
                     ("Add owner to group", "admin@mock.tenant", "ENG-Engineering"),
@@ -61,8 +65,28 @@ class EntraAuditMock:
 
     async def list_admin_role_members(self) -> list[dict]:
         return [
-            {"role": "Global Administrator", "member_upn": "admin@mock.tenant", "member_id": "u1", "type": "user"},
-            {"role": "Global Administrator", "member_upn": "founder@mock.tenant", "member_id": "u2", "type": "user"},
-            {"role": "Privileged Role Administrator", "member_upn": "secadmin@mock.tenant", "member_id": "u3", "type": "user"},
-            {"role": "Security Administrator", "member_upn": "secadmin@mock.tenant", "member_id": "u3", "type": "user"},
+            {
+                "role": "Global Administrator",
+                "member_upn": "admin@mock.tenant",
+                "member_id": "u1",
+                "type": "user",
+            },
+            {
+                "role": "Global Administrator",
+                "member_upn": "founder@mock.tenant",
+                "member_id": "u2",
+                "type": "user",
+            },
+            {
+                "role": "Privileged Role Administrator",
+                "member_upn": "secadmin@mock.tenant",
+                "member_id": "u3",
+                "type": "user",
+            },
+            {
+                "role": "Security Administrator",
+                "member_upn": "secadmin@mock.tenant",
+                "member_id": "u3",
+                "type": "user",
+            },
         ]

@@ -28,9 +28,29 @@ class Settings(BaseSettings):
     portal_api_key: SecretStr | None = None
 
     def m365_configured(self) -> bool:
-        return all([
-            self.m365_tenant_id, self.m365_client_id, self.m365_client_secret, self.m365_domain
-        ])
+        return all(
+            [self.m365_tenant_id, self.m365_client_id, self.m365_client_secret, self.m365_domain]
+        )
+
+    def m365_credentials(self) -> tuple[str, str, str]:
+        """Tenant id, client id and client secret as plain strings.
+
+        Each field is optional on the model because it is read from the
+        environment, but every adapter only builds a credential after
+        ``m365_configured()`` has passed. Resolving them in one place keeps
+        that invariant provable instead of making each adapter re-assert it.
+        """
+        if (
+            self.m365_tenant_id is None
+            or self.m365_client_id is None
+            or self.m365_client_secret is None
+        ):
+            raise RuntimeError("M365 credentials not configured")
+        return (
+            self.m365_tenant_id,
+            self.m365_client_id,
+            self.m365_client_secret.get_secret_value(),
+        )
 
     def sharepoint_host(self) -> str:
         if self.m365_sharepoint_host:

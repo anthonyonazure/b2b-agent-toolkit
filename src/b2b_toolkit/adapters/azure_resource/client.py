@@ -29,10 +29,11 @@ class AzureResourceClient:
         self._settings = settings
 
     async def _token(self, audience: str = "https://management.azure.com/.default") -> str:
+        tenant_id, client_id, client_secret = self._settings.m365_credentials()
         async with ClientSecretCredential(
-            tenant_id=self._settings.m365_tenant_id,
-            client_id=self._settings.m365_client_id,
-            client_secret=self._settings.m365_client_secret.get_secret_value(),
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret,
         ) as cred:
             return (await cred.get_token(audience)).token
 

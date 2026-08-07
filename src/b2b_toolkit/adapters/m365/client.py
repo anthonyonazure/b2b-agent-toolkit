@@ -11,10 +11,12 @@ and admin consent granted.
 
 from __future__ import annotations
 
+from typing import TypeVar
+
 import structlog
 from azure.identity.aio import ClientSecretCredential
 from msgraph import GraphServiceClient
-from msgraph.generated.models.assigned_license import AssignedLicense
+from msgraph.generated.models.o_data_errors.o_data_error import ODataError
 from msgraph.generated.models.password_profile import PasswordProfile
 from msgraph.generated.models.planner_bucket import PlannerBucket
 from msgraph.generated.models.planner_plan import PlannerPlan
@@ -27,6 +29,22 @@ from b2b_toolkit.settings import Settings
 
 log = structlog.get_logger()
 
+T = TypeVar("T")
+
+
+def _required(value: T | None, what: str) -> T:
+    """Unwrap a field that Graph declares optional but must be present here.
+
+    Every attribute on Graph's generated models is typed ``| None`` because the
+    same class is reused for partial responses. An object we just created or
+    just read coming back without its identifier is a protocol violation, not a
+    normal outcome, so fail loudly rather than letting ``None`` leak into the
+    toolkit's own models.
+    """
+    if value is None:
+        raise RuntimeError(f"Microsoft Graph returned no {what}")
+    return value
+
 
 class M365GraphClient:
     def __init__(self, settings: Settings, default_password: str = "ChangeMe!" + "12345"):
@@ -34,10 +52,11 @@ class M365GraphClient:
             raise RuntimeError("M365 credentials not configured")
         self._settings = settings
         self._default_password = default_password
+        tenant_id, client_id, client_secret = settings.m365_credentials()
         self._cred = ClientSecretCredential(
-            tenant_id=settings.m365_tenant_id,
-            client_id=settings.m365_client_id,
-            client_secret=settings.m365_client_secret.get_secret_value(),
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret,
         )
         self._client = GraphServiceClient(
             credentials=self._cred,
@@ -50,7 +69,11 @@ class M365GraphClient:
         existing = await self._find_user_by_upn(upn)
         if existing:
             log.info("m365.mailbox.exists", upn=upn)
-            return Mailbox(upn=upn, display_name=existing.display_name, object_id=existing.id)
+            return Mailbox(
+                upn=upn,
+                display_name=_required(existing.display_name, "displayName for existing user"),
+                object_id=_required(existing.id, "id for existing user"),
+            )
 
         body = User(
             account_enabled=True,
@@ -63,8 +86,9 @@ class M365GraphClient:
             ),
         )
         created = await self._client.users.post(body)
-        log.info("m365.mailbox.created", upn=upn, object_id=created.id)
-        return Mailbox(upn=upn, display_name=display_name, object_id=created.id)
+        object_id = _required(_required(created, "response for user create").id, "id for new user")
+        log.info("m365.mailbox.created", upn=upn, object_id=object_id)
+        return Mailbox(upn=upn, display_name=display_name, object_id=object_id)
 
     async def _find_user_by_upn(self, upn: str) -> User | None:
         try:
@@ -83,8 +107,8 @@ class M365GraphClient:
     async def create_sharepoint_site(self, *, name: str, owner_upn: str) -> SharePointSite:
         # Real impl: use Sites.Create endpoint or provision via M365 group.
         # For brevity here we provision an M365 group (which auto-creates a SharePoint site).
-        from msgraph.generated.models.group import Group
         from msgraph.generated.groups.groups_request_builder import GroupsRequestBuilder
+        from msgraph.generated.models.group import Group
 
         slug = name.lower().replace(" ", "-")
 
@@ -97,10 +121,10 @@ class M365GraphClient:
             )
         )
         if existing and existing.value:
-            g = existing.value[0]
-            log.info("m365.site.exists", name=name, group_id=g.id)
+            group_id = _required(existing.value[0].id, "id for existing group")
+            log.info("m365.site.exists", name=name, group_id=group_id)
             return SharePointSite(
-                site_id=g.id,
+                site_id=group_id,
                 web_url=f"https://{self._settings.sharepoint_host()}/sites/{slug}",
                 name=name,
             )
@@ -113,12 +137,15 @@ class M365GraphClient:
             group_types=["Unified"],
         )
         created = await self._client.groups.post(group)
+        created_group_id = _required(
+            _required(created, "response for group create").id, "id for new group"
+        )
         # The group provisions a SharePoint site asynchronously; web URL is derivable
         # from the SharePoint host + group mailNickname. In production you'd poll
         # /groups/{id}/sites/root for a deterministic URL.
         web_url = f"https://{self._settings.sharepoint_host()}/sites/{slug}"
-        log.info("m365.site.created", name=name, group_id=created.id)
-        return SharePointSite(site_id=created.id, web_url=web_url, name=name)
+        log.info("m365.site.created", name=name, group_id=created_group_id)
+        return SharePointSite(site_id=created_group_id, web_url=web_url, name=name)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8))
     async def create_planner_board(
@@ -126,14 +153,27 @@ class M365GraphClient:
     ) -> PlannerBoard:
         # Idempotency: if a plan with the same title already exists in the group, reuse it
         try:
-            existing_plans = await self._client.groups.by_group_id(owner_group_id).planner.plans.get()
+            existing_plans = await self._client.groups.by_group_id(
+                owner_group_id
+            ).planner.plans.get()
             for p in (existing_plans.value if existing_plans else []) or []:
                 if p.title == title:
-                    log.info("m365.planner.exists", plan_id=p.id, title=title)
-                    existing_buckets = await self._client.planner.plans.by_planner_plan_id(p.id).buckets.get()
-                    bucket_ids = [b.id for b in (existing_buckets.value or [])]
-                    return PlannerBoard(plan_id=p.id, title=title, bucket_ids=bucket_ids)
-        except Exception as e:
+                    existing_plan_id = _required(p.id, "id for existing plan")
+                    log.info("m365.planner.exists", plan_id=existing_plan_id, title=title)
+                    existing_buckets = await self._client.planner.plans.by_planner_plan_id(
+                        existing_plan_id
+                    ).buckets.get()
+                    existing_bucket_ids = [
+                        _required(b.id, "id for existing bucket")
+                        for b in (existing_buckets.value if existing_buckets else []) or []
+                    ]
+                    return PlannerBoard(
+                        plan_id=existing_plan_id, title=title, bucket_ids=existing_bucket_ids
+                    )
+        # A failed idempotency probe is not fatal — we fall through and create the
+        # plan. Only Graph's own API errors are tolerated here; anything else
+        # (a bug in this code, a cancelled task) still propagates.
+        except ODataError as e:
             log.warning("m365.planner.lookup_failed", err=str(e)[:200])
 
         plan = PlannerPlan(
@@ -144,13 +184,21 @@ class M365GraphClient:
             ),
         )
         created_plan = await self._client.planner.plans.post(plan)
+        plan_id = _required(
+            _required(created_plan, "response for plan create").id, "id for new plan"
+        )
         bucket_ids: list[str] = []
         for name in buckets:
-            b = PlannerBucket(name=name, plan_id=created_plan.id, order_hint=" !")
+            b = PlannerBucket(name=name, plan_id=plan_id, order_hint=" !")
             created_bucket = await self._client.planner.buckets.post(b)
-            bucket_ids.append(created_bucket.id)
-        log.info("m365.planner.created", plan_id=created_plan.id, buckets=len(bucket_ids))
-        return PlannerBoard(plan_id=created_plan.id, title=title, bucket_ids=bucket_ids)
+            bucket_ids.append(
+                _required(
+                    _required(created_bucket, "response for bucket create").id,
+                    "id for new bucket",
+                )
+            )
+        log.info("m365.planner.created", plan_id=plan_id, buckets=len(bucket_ids))
+        return PlannerBoard(plan_id=plan_id, title=title, bucket_ids=bucket_ids)
 
     async def upload_file(self, *, site_id: str, path: str, content: bytes) -> str:
         # site_id here is the M365 group id (we provision via group).
@@ -161,21 +209,21 @@ class M365GraphClient:
         import httpx
 
         site = await self._client.groups.by_group_id(site_id).sites.by_site_id("root").get()
-        drive = await self._client.sites.by_site_id(site.id).drive.get()
+        root_site_id = _required(_required(site, "root site for group").id, "id for root site")
+        drive = await self._client.sites.by_site_id(root_site_id).drive.get()
+        drive_id = _required(_required(drive, "drive for site").id, "id for drive")
 
         # Use a self-contained credential for the raw HTTP token — the long-lived
         # one shared with the SDK has its aiohttp transport closed by this point.
+        tenant_id, client_id, client_secret = self._settings.m365_credentials()
         async with ClientSecretCredential(
-            tenant_id=self._settings.m365_tenant_id,
-            client_id=self._settings.m365_client_id,
-            client_secret=self._settings.m365_client_secret.get_secret_value(),
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret,
         ) as token_cred:
             token = await token_cred.get_token("https://graph.microsoft.com/.default")
         encoded_path = path.lstrip("/")
-        url = (
-            f"https://graph.microsoft.com/v1.0/drives/{drive.id}"
-            f"/root:/{encoded_path}:/content"
-        )
+        url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{encoded_path}:/content"
         async with httpx.AsyncClient(timeout=60.0) as http:
             r = await http.put(
                 url,

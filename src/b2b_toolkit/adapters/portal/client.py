@@ -59,8 +59,6 @@ class PortalClient:
         return r.json()["url"]
 
     async def get_usage(self, account_id: str, days: int = 30) -> dict:
-        r = await self._http.get(
-            f"/v1/accounts/{account_id}/usage", params={"days": days}
-        )
+        r = await self._http.get(f"/v1/accounts/{account_id}/usage", params={"days": days})
         r.raise_for_status()
         return r.json()

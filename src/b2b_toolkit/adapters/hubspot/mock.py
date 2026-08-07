@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import structlog
 
@@ -14,7 +14,7 @@ _SEED_DEALS = {
         "dealname": "Acme Corp - Managed SOC",
         "amount": 84_000,
         "dealstage": "closedwon",
-        "closedate": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+        "closedate": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
         "associated_company_id": "company-001",
         "services_purchased": ["managed-soc", "vuln-mgmt", "incident-response"],
     },
@@ -30,7 +30,7 @@ _SEED_COMPANIES = {
         "primary_contact_email": "ciso@acme.com",
         "primary_contact_name": "Jordan Reeves",
         "logo_url": "https://logo.clearbit.com/acme.com",
-        "contract_signed_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+        "contract_signed_at": (datetime.now(UTC) - timedelta(days=1)).isoformat(),
     },
 }
 
@@ -55,6 +55,6 @@ class HubSpotMock:
         return {
             "emails_opened": 12,
             "meetings_attended": 3,
-            "last_activity_at": (datetime.now(timezone.utc) - timedelta(days=4)).isoformat(),
+            "last_activity_at": (datetime.now(UTC) - timedelta(days=4)).isoformat(),
             "trend": "stable",
         }
